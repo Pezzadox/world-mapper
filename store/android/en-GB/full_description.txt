@@ -1,0 +1,26 @@
+World Mapper turns your phone into a measuring instrument and asks the oldest question going: is the Earth a ball, or is it flat?
+
+Point your phone at the Sun or the Moon. The app measures how high it stands above level and notes the moment you took it. That is all you do. One reading takes about thirty seconds.
+
+On its own, one reading proves nothing. Put thousands together from all over the world and the shape falls out of the numbers, because the two theories disagree about what people in different places should see at the same instant. Nobody has to be trusted. The measurements decide.
+
+HOW IT WORKS
+
+• Pick the Sun or the Moon.
+• Hold the phone upright and line it up in the circle on screen.
+• Hold still. The reading is taken for you.
+• It is saved automatically. There is nothing to send to anyone.
+
+A FAIR TEST
+
+The method starts from nothing. It does not assume a round Earth or a flat one, and the answer is not decided in advance. Both theories are measured against the same readings and the one that fits better wins. If the readings cannot tell them apart, the app says so rather than guessing.
+
+WHAT IS SAVED
+
+The height you measured, the time, your phone type, and your location rounded to about a kilometre. No name, no account, no photo. The camera is used to aim and nothing more.
+
+SAFETY
+
+Never look straight at the Sun. Look at the screen instead, as you would when taking any photo.
+
+World Mapper is an open experiment. Every reading you take makes the picture sharper.

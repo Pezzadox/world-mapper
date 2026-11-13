@@ -1,0 +1,12 @@
+# Runs on every push: catches a broken page before it ever reaches a store.
+name: Check
+on: [push, pull_request]
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22' }
+      - name: The reading page parses and has its pieces
+        run: node tools/check-page.js

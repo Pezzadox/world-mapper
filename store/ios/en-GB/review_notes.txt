@@ -1,0 +1,7 @@
+No account or login is needed: open the app and tap through the three steps.
+
+To review the app indoors, where the Sun is not visible, the aim check can be skipped: after ten seconds a "Take the reading now" button appears, which records whatever angle the phone is held at. Any bright round light source (a lamp) will also satisfy the automatic detection.
+
+Permissions: the camera is used only to aim at the Sun or Moon on screen and no image is stored or transmitted; the motion sensors measure the angle above level; location is rounded to about 1 km before it is saved. Readings are stored anonymously, with no name, account or device identifier.
+
+This app is an open scientific experiment and takes no position on the question it measures.

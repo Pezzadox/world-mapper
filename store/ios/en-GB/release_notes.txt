@@ -1,0 +1,1 @@
+First release. Take a Sun or Moon reading in three taps; readings save by themselves.

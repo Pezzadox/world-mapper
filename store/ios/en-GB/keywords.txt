@@ -1,0 +1,1 @@
+sun,moon,altitude,sextant,earth,flat,globe,science,experiment,measure,angle,astronomy,citizen science

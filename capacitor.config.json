@@ -1,0 +1,19 @@
+{
+  "appId": "com.worldmapper.app",
+  "appName": "World Mapper",
+  "webDir": "www",
+  "android": { "allowMixedContent": false },
+  "ios": { "contentInset": "always" },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 1200,
+      "backgroundColor": "#0A1126",
+      "androidScaleType": "CENTER_CROP",
+      "showSpinner": false
+    },
+    "LocalNotifications": {
+      "smallIcon": "ic_stat_worldmapper",
+      "iconColor": "#F2B655"
+    }
+  }
+}

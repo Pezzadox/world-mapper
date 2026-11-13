@@ -1,0 +1,2 @@
+app_identifier "com.worldmapper.app"
+json_key_data ENV["PLAY_SERVICE_ACCOUNT_JSON"] if ENV["PLAY_SERVICE_ACCOUNT_JSON"]

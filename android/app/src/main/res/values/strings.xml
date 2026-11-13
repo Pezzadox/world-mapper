@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">World Mapper</string>
+    <string name="title_activity_main">World Mapper</string>
+    <string name="package_name">com.worldmapper.app</string>
+    <string name="custom_url_scheme">com.worldmapper.app</string>
+</resources>

@@ -1,0 +1,82 @@
+# World Mapper release lanes. Called by .github/workflows/release.yml.
+default_platform(:android)
+
+platform :android do
+  desc "Upload the built .aab to Play internal testing"
+  lane :internal do
+    upload_to_play_store(
+      track: "internal",
+      aab: "android/app/build/outputs/bundle/release/app-release.aab",
+      release_status: "draft",            # nothing reaches testers until you promote it in the console
+      skip_upload_metadata: true,
+      skip_upload_images: true,
+      skip_upload_screenshots: true
+    )
+  end
+
+  desc "Promote whatever is in internal testing to production (run by hand)"
+  lane :promote do
+    upload_to_play_store(
+      track: "internal",
+      track_promote_to: "production",
+      release_status: "draft",
+      skip_upload_aab: true, skip_upload_metadata: true, skip_upload_images: true, skip_upload_screenshots: true
+    )
+  end
+end
+
+platform :ios do
+  desc "Build the app and upload it to TestFlight"
+  lane :beta do
+    api_key = app_store_connect_api_key(
+      key_id: ENV["APP_STORE_CONNECT_KEY_ID"],
+      issuer_id: ENV["APP_STORE_CONNECT_ISSUER_ID"],
+      key_content: ENV["APP_STORE_CONNECT_API_KEY"],
+      is_key_content_base64: true,
+      in_house: false
+    )
+
+    # A keychain that exists only for this build, holding the distribution certificate.
+    create_keychain(name: "build", password: "build", default_keychain: true, unlock: true, timeout: 3600, lock_when_sleeps: false)
+    import_certificate(
+      certificate_path: write_p12,
+      certificate_password: ENV["IOS_DIST_CERT_PASSWORD"] || "",
+      keychain_name: "build", keychain_password: "build"
+    )
+
+    # Let Apple issue and manage the provisioning profile, so there is nothing to renew by hand.
+    update_code_signing_settings(
+      path: "ios/App/App.xcodeproj",
+      use_automatic_signing: false,
+      team_id: ENV["IOS_TEAM_ID"],
+      code_sign_identity: "Apple Distribution"
+    )
+    sigh(api_key: api_key, app_identifier: "com.worldmapper.app", readonly: false)
+    update_project_provisioning(
+      xcodeproj: "ios/App/App.xcodeproj",
+      profile: lane_context[SharedValues::SIGH_PROFILE_PATH],
+      build_configuration: "Release",
+      code_signing_identity: "Apple Distribution"
+    )
+
+    increment_version_number_in_xcodeproj(xcodeproj: "ios/App/App.xcodeproj", version_number: ENV["VERSION_NAME"]) if ENV["VERSION_NAME"]
+    increment_build_number_in_xcodeproj(xcodeproj: "ios/App/App.xcodeproj", build_number: ENV["BUILD_NUMBER"]) if ENV["BUILD_NUMBER"]
+
+    cocoapods(podfile: "ios/App/Podfile", repo_update: true)
+    build_app(
+      workspace: "ios/App/App.xcworkspace",
+      scheme: "App",
+      export_method: "app-store",
+      output_directory: "build",
+      export_options: { provisioningProfiles: { "com.worldmapper.app" => lane_context[SharedValues::SIGH_NAME] } }
+    )
+    upload_to_testflight(api_key: api_key, skip_waiting_for_build_processing: true)
+  end
+end
+
+# The certificate arrives as base64 in a secret; write it to a file for import.
+def write_p12
+  path = File.join(Dir.tmpdir, "dist.p12")
+  File.binwrite(path, Base64.decode64(ENV.fetch("IOS_DIST_CERT_P12")))
+  path
+end

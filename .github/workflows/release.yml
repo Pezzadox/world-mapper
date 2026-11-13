@@ -1,0 +1,126 @@
+# World Mapper — one tag, both stores.
+#
+#   git tag v1.0.3 && git push origin v1.0.3
+#
+# Android: builds a signed .aab and uploads it to Play internal testing.
+# iOS:     builds a signed .ipa on a macOS runner and uploads it to TestFlight.
+# Neither job needs a Mac of your own. Both stop safely if their secrets are missing,
+# so you can set up one store first and add the other later.
+
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build, e.g. 1.0.3'
+        required: true
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      name: ${{ steps.v.outputs.name }}
+      code: ${{ steps.v.outputs.code }}
+    steps:
+      - id: v
+        run: |
+          NAME="${{ github.event.inputs.version }}"
+          [ -z "$NAME" ] && NAME="${GITHUB_REF_NAME#v}"
+          echo "name=$NAME" >> $GITHUB_OUTPUT
+          # build number: minutes since 2026-01-01, always increasing, never reused
+          echo "code=$(( ( $(date +%s) - 1767225600 ) / 60 ))" >> $GITHUB_OUTPUT
+
+  android:
+    needs: version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22', cache: 'npm' }
+      - uses: actions/setup-java@v4
+        with: { distribution: 'temurin', java-version: '21' }
+
+      - name: Are the Android secrets set?
+        id: gate
+        env:
+          KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          PLAY_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+        run: |
+          if [ -n "$KEYSTORE" ] && [ -n "$PLAY_JSON" ]; then echo "ready=yes" >> $GITHUB_OUTPUT
+          else echo "ready=no" >> $GITHUB_OUTPUT; echo "::warning::Android secrets not set — skipping the Android build."; fi
+
+      - if: steps.gate.outputs.ready == 'yes'
+        run: npm ci && npx cap sync android
+
+      - name: Unpack the signing key
+        if: steps.gate.outputs.ready == 'yes'
+        run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > "$RUNNER_TEMP/release.keystore"
+
+      - name: Build the app bundle
+        if: steps.gate.outputs.ready == 'yes'
+        working-directory: android
+        run: |
+          ./gradlew bundleRelease --no-daemon \
+            -PvName=${{ needs.version.outputs.name }} \
+            -PvCode=${{ needs.version.outputs.code }} \
+            -PstoreFileProp="$RUNNER_TEMP/release.keystore" \
+            -PstorePasswordProp='${{ secrets.ANDROID_KEYSTORE_PASSWORD }}' \
+            -PkeyAliasProp='${{ secrets.ANDROID_KEY_ALIAS }}' \
+            -PkeyPasswordProp='${{ secrets.ANDROID_KEY_PASSWORD }}'
+
+      - name: Keep a copy of the bundle
+        if: steps.gate.outputs.ready == 'yes'
+        uses: actions/upload-artifact@v4
+        with:
+          name: world-mapper-${{ needs.version.outputs.name }}.aab
+          path: android/app/build/outputs/bundle/release/app-release.aab
+
+      - uses: ruby/setup-ruby@v1
+        if: steps.gate.outputs.ready == 'yes'
+        with: { ruby-version: '3.3', bundler-cache: true }
+
+      - name: Send it to Play internal testing
+        if: steps.gate.outputs.ready == 'yes'
+        env:
+          PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+        run: bundle exec fastlane android internal
+
+  ios:
+    needs: version
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22', cache: 'npm' }
+
+      - name: Are the Apple secrets set?
+        id: gate
+        env:
+          KEY: ${{ secrets.APP_STORE_CONNECT_API_KEY }}
+          CERT: ${{ secrets.IOS_DIST_CERT_P12 }}
+        run: |
+          if [ -n "$KEY" ] && [ -n "$CERT" ]; then echo "ready=yes" >> $GITHUB_OUTPUT
+          else echo "ready=no" >> $GITHUB_OUTPUT; echo "::warning::Apple secrets not set — skipping the iOS build."; fi
+
+      - if: steps.gate.outputs.ready == 'yes'
+        run: npm ci && npx cap sync ios
+
+      - uses: ruby/setup-ruby@v1
+        if: steps.gate.outputs.ready == 'yes'
+        with: { ruby-version: '3.3', bundler-cache: true }
+
+      - name: Build and send it to TestFlight
+        if: steps.gate.outputs.ready == 'yes'
+        env:
+          APP_STORE_CONNECT_API_KEY: ${{ secrets.APP_STORE_CONNECT_API_KEY }}
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          IOS_DIST_CERT_P12: ${{ secrets.IOS_DIST_CERT_P12 }}
+          IOS_DIST_CERT_PASSWORD: ${{ secrets.IOS_DIST_CERT_PASSWORD }}
+          IOS_TEAM_ID: ${{ secrets.IOS_TEAM_ID }}
+          VERSION_NAME: ${{ needs.version.outputs.name }}
+          BUILD_NUMBER: ${{ needs.version.outputs.code }}
+        run: bundle exec fastlane ios beta
