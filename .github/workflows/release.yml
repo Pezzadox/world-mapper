@@ -100,9 +100,9 @@ jobs:
         id: gate
         env:
           KEY: ${{ secrets.APP_STORE_CONNECT_API_KEY }}
-          CERT: ${{ secrets.IOS_DIST_CERT_P12 }}
+          MATCH: ${{ secrets.MATCH_PASSWORD }}
         run: |
-          if [ -n "$KEY" ] && [ -n "$CERT" ]; then echo "ready=yes" >> $GITHUB_OUTPUT
+          if [ -n "$KEY" ] && [ -n "$MATCH" ]; then echo "ready=yes" >> $GITHUB_OUTPUT
           else echo "ready=no" >> $GITHUB_OUTPUT; echo "::warning::Apple secrets not set — skipping the iOS build."; fi
 
       - if: steps.gate.outputs.ready == 'yes'
@@ -118,9 +118,10 @@ jobs:
           APP_STORE_CONNECT_API_KEY: ${{ secrets.APP_STORE_CONNECT_API_KEY }}
           APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
           APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
-          IOS_DIST_CERT_P12: ${{ secrets.IOS_DIST_CERT_P12 }}
-          IOS_DIST_CERT_PASSWORD: ${{ secrets.IOS_DIST_CERT_PASSWORD }}
           IOS_TEAM_ID: ${{ secrets.IOS_TEAM_ID }}
+          MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
+          MATCH_GIT_TOKEN: ${{ secrets.MATCH_GIT_TOKEN }}
+          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
           VERSION_NAME: ${{ needs.version.outputs.name }}
           BUILD_NUMBER: ${{ needs.version.outputs.code }}
         run: bundle exec fastlane ios beta
