@@ -53,5 +53,9 @@
 	<string>World Mapper uses the motion sensors to measure how high the Sun or Moon stands above level.</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>World Mapper measures the distance between phones that are near each other. This is how the map is built without relying on satellites.</string>
+	<key>NSBluetoothPeripheralUsageDescription</key>
+	<string>World Mapper lets nearby World Mapper phones see this one, so the distance between you can be measured.</string>
 </dict>
 </plist>

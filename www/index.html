@@ -131,6 +131,7 @@ details.more dl { margin-top: 10px; }
     <p class="s-tag up">Settling the debate once and for all.</p>
   </div>
 </div>
+<script src="native.js"></script>
 <script>
 (function () {
   var s = document.getElementById('splash'), seen = false;
@@ -259,6 +260,7 @@ details.more dl { margin-top: 10px; }
         </div>
       </div>
       <p id="copy-out" aria-live="polite" style="font-weight:600"></p>
+      <p class="muted" id="near-out" aria-live="polite" hidden></p>
       <details class="more">
         <summary>Details</summary>
         <dl>
@@ -296,13 +298,18 @@ details.more dl { margin-top: 10px; }
   $('next').addEventListener('click', function () { setStep(Math.min(3, step + 1)); });
   $('back').addEventListener('click', function () { setStep(Math.max(1, step - 1)); });
   $('skip').addEventListener('click', function () { setStep(3); $('go').click(); });
+  // If native.js is missing for any reason, the page still works: these do nothing.
+  var WM = window.WM || { inApp: false, honesty: function () { return { score: null, why: [] }; },
+    checks: function () { return Promise.resolve({}); }, sensorBurst: function () { return Promise.resolve({}); },
+    measureNeighbours: function () { return Promise.resolve([]); }, dailyReminder: function () { return Promise.resolve({ ok: false }); } };
+
   function store(k, v) { try { if (v === undefined) return JSON.parse(localStorage.getItem(k)); localStorage.setItem(k, JSON.stringify(v)); } catch (e) { return null; } }
 
   var me = store('wm-id'); if (!me) { me = 'p-' + Math.random().toString(36).slice(2, 8); store('wm-id', me); }
   var DEVICE = (navigator.userAgent || '').replace(/^Mozilla\/5\.0 \(/, '').slice(0, 70);
   var motionDenied = false, target = 'sun', bias = store('wm-bias') || { b: 0, g: 0, set: false };
   if (!(Math.hypot(bias.b, bias.g) < 3)) { bias = { b: 0, g: 0, set: false }; store('wm-bias', bias); }
-  var camStart = 0, lastPose = null;
+  var camStart = 0, lastPose = null, checksNow = null, links = [];
   var ori = { b: null, g: null, t: 0, hist: [] }, loc = null, stream = null, raf = 0, hold = 0, lastFrame = 0, done = false;
 
   /* ---- target choice ---- */
@@ -404,7 +411,9 @@ details.more dl { margin-top: 10px; }
     startSensors().then(function () {
       return navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
     }).then(function (s) {
-      stream = s; video.srcObject = s; done = false; hold = 0; camStart = performance.now(); $('manual').hidden = true; show('cam');
+      stream = s; video.srcObject = s; done = false; hold = 0; camStart = performance.now();
+      checksNow = null;
+      try { Promise.all([WM.checks(), WM.sensorBurst(1200)]).then(function (x) { checksNow = Object.assign({}, x[0], x[1]); }); } catch (e) { } $('manual').hidden = true; show('cam');
       return video.play();
     }).then(function () { loop(); })
       .catch(function (e) { fail(e && e.message === 'motion' ? 'Motion sensors were not allowed. Allow them in your browser settings and try again.' : 'The camera could not start. Allow camera access, and open this page from an https web address.'); });
@@ -505,6 +514,7 @@ details.more dl { margin-top: 10px; }
   $('manual').addEventListener('click', function () { if (lastPose && !done) capture(lastPose.p, lastPose.sp, true); });
   function capture(p, sp, manual) {
     done = true;
+    var honest = WM.honesty(checksNow || {});
     var c = document.createElement('canvas'), s = 160; c.width = s; c.height = s;
     var vw = video.videoWidth, vh = video.videoHeight, m = Math.min(vw, vh) * 0.35;
     c.getContext('2d').drawImage(video, (vw - m) / 2, (vh - m) / 2, m, m, 0, 0, s, s);
@@ -515,6 +525,9 @@ details.more dl { margin-top: 10px; }
       timeUTC: new Date().toISOString(),
       lat: loc ? +loc.latitude.toFixed(2) : null, lon: loc ? +loc.longitude.toFixed(2) : null, locAccuracyM: loc ? Math.round(loc.accuracy) : null,
       upsideDown: p.upsideDown, levelChecked: bias.set, tester: me, device: DEVICE, sent: false,
+      inApp: WM.inApp,
+      honesty: honest.score, honestyNotes: honest.why.join('; ') || null,
+      clockOffsetS: checksNow && checksNow.clockOffsetS != null ? +checksNow.clockOffsetS.toFixed(1) : null,
       checks: ['motion sensor live', 'held still'].concat(manual ? ['aimed by hand'] : ['bright disc found', 'disc centred']).concat(['above 5\u00B0']).concat(loc ? ['location fixed'] : [])
     };
     var h = store('wm-readings') || []; h.push(r); store('wm-readings', h.slice(-50));
@@ -536,11 +549,42 @@ details.more dl { margin-top: 10px; }
       $('send').hidden = ok;
     });
     window.__lastReading = r;
+    findNeighbours(r);
+  }
+
+  /* ---- phone-to-phone distance: the measurement that owes nothing to GPS ---- */
+  function findNeighbours(r) {
+    if (!WM.inApp) return;
+    $('near-out').hidden = false;
+    $('near-out').textContent = 'Looking for other World Mapper phones nearby\u2026';
+    WM.measureNeighbours(me, 8).then(function (found) {
+      links = found;
+      if (!found.length) { $('near-out').textContent = 'No other World Mapper phones nearby.'; return; }
+      $('near-out').textContent = found.length === 1
+        ? 'One phone nearby, about ' + found[0].metres + ' m away. Saved.'
+        : found.length + ' phones nearby, the closest about ' + found[0].metres + ' m away. Saved.';
+      found.forEach(function (l) {
+        insert({
+          title: 'Link: ' + me + ' to ' + l.other + ', about ' + l.metres + ' m (' + l.nearM + '\u2013' + l.farM + ' m), ' + r.timeUTC,
+          fromPhone: me, toPhone: l.other, metres: l.metres, nearM: l.nearM, farM: l.farM,
+          samples: l.samples, medianRssi: l.medianRssi, timeUTC: new Date().toISOString(), method: 'bluetooth-rssi'
+        }, WIX.links).catch(function () { });
+      });
+    });
   }
   $('again').addEventListener('click', function () { setStep(3); $('go').click(); });
 
   /* ---- daily reminder: a repeating calendar entry at 12:00, the phone's own calendar does the notifying ---- */
   $('remind').addEventListener('click', function () {
+    if (WM.inApp) {
+      $('remind-out').textContent = 'Setting the reminder\u2026';
+      WM.dailyReminder(12).then(function (res) {
+        $('remind-out').textContent = res.ok
+          ? '\u2713 You\u2019ll get a reminder at 12:00 every day.'
+          : (res.reason === 'refused' ? 'Notifications are switched off for World Mapper. Turn them on in your phone\u2019s settings.' : 'Couldn\u2019t set the reminder on this phone.');
+      });
+      return;
+    }
     var d = new Date(); if (d.getHours() >= 12) d.setDate(d.getDate() + 1);
     function two(n) { return (n < 10 ? '0' : '') + n; }
     var day = d.getFullYear() + two(d.getMonth() + 1) + two(d.getDate()), link = location.origin + location.pathname;
@@ -559,16 +603,16 @@ details.more dl { margin-top: 10px; }
     } catch (e) { $('remind-out').textContent = 'Couldn\u2019t make the reminder on this phone. Set a daily 12:00 alarm instead.'; }
   });
   /* ---- automatic collection: each reading is added to the site's Readings table ---- */
-  var WIX = { clientId: '4cbaa3c1-cbf9-4f08-9780-7c3a244af8ce', collection: 'Readings' }, tok = null;
+  var WIX = { clientId: '4cbaa3c1-cbf9-4f08-9780-7c3a244af8ce', collection: 'Readings', links: 'Links' }, tok = null;
   function getToken() {
     if (tok && tok.exp > Date.now()) return Promise.resolve(tok.t);
     return fetch('https://www.wixapis.com/oauth2/token', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ clientId: WIX.clientId, grantType: 'anonymous' }) })
       .then(function (r) { return r.ok ? r.json() : Promise.reject(new Error('token ' + r.status)); })
       .then(function (j) { tok = { t: j.access_token, exp: Date.now() + 3 * 3600e3 }; return tok.t; });
   }
-  function insert(data) {
+  function insert(data, collection) {
     return getToken().then(function (t) {
-      return fetch('https://www.wixapis.com/wix-data/v2/items', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': t }, body: JSON.stringify({ dataCollectionId: WIX.collection, dataItem: { data: data } }) });
+      return fetch('https://www.wixapis.com/wix-data/v2/items', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': t }, body: JSON.stringify({ dataCollectionId: collection || WIX.collection, dataItem: { data: data } }) });
     }).then(function (r) { if (!r.ok) return r.text().then(function (x) { throw new Error('save ' + r.status + ' ' + x.slice(0, 160)); }); return r.json(); });
   }
   function upload(r) {
