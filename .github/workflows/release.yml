@@ -36,6 +36,8 @@ jobs:
   android:
     needs: version
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -81,6 +83,23 @@ jobs:
         with:
           name: world-mapper-${{ needs.version.outputs.name }}.aab
           path: android/app/build/outputs/bundle/release/app-release.aab
+
+      # Google wants the very first bundle uploaded by hand in Play Console. Until the Play
+      # service account is set, also put the bundle on the play-bundles branch, so it can be
+      # fetched straight into Play Console without downloading and unzipping the artifact.
+      - name: Put the bundle on the play-bundles branch
+        if: steps.gate.outputs.ready == 'yes' && steps.gate.outputs.upload == 'no'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          out="$RUNNER_TEMP/play-bundles"; mkdir -p "$out"
+          cp android/app/build/outputs/bundle/release/app-release.aab "$out/world-mapper-${{ needs.version.outputs.name }}.aab"
+          cp android/app/build/outputs/bundle/release/app-release.aab "$out/latest.aab"
+          cd "$out"
+          git init -q -b play-bundles
+          git add .
+          git -c user.name=github-actions -c user.email=41898282+github-actions[bot]@users.noreply.github.com commit -qm "Android bundle ${{ needs.version.outputs.name }}"
+          git push -qf "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" play-bundles
 
       - uses: ruby/setup-ruby@v1
         if: steps.gate.outputs.upload == 'yes'
